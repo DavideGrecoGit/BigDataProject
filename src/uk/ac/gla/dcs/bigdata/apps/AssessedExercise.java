@@ -122,6 +122,17 @@ public class AssessedExercise {
 		// - 3.1 Group newsArticle by id
 		NewsToId keyFunction = new NewsToId();
 		KeyValueGroupedDataset<String, NewsArticle> newsById = news.groupByKey(keyFunction, Encoders.STRING());
+			
+		// - 3.2 Transform List<ContentItem> into String, keep grouping by id
+		
+		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
+		
+		Encoder<Tuple2<String,String>> keyStringEncoder = Encoders.tuple(Encoders.STRING(), Encoders.STRING());
+
+		Dataset<Tuple2<String, String>> stringContentById = newsById.flatMapGroups(stringContentFunction, keyStringEncoder);
+		
+		// Debug
+		System.out.print(stringContentById.first());
 		
 		return null; // replace this with the the list of DocumentRanking output by your topology
 	}
