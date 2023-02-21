@@ -1,0 +1,191 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>BigData</groupId>
+  <artifactId>BigData-AE</artifactId>
+  <version>1.0</version>
+  
+<properties>
+    <maven.compiler.target>11</maven.compiler.target>
+    <maven.compiler.source>11</maven.compiler.source>
+</properties>
+  
+  <dependencies>
+  
+  <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
+<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-core_2.13</artifactId>
+    <version>3.2.0</version>
+</dependency>
+  
+  <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-streaming -->
+<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-streaming_2.13</artifactId>
+    <version>3.2.0</version>
+    <scope>provided</scope>
+</dependency>
+
+<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-sql_2.13</artifactId>
+    <version>3.2.0</version>
+    <scope>provided</scope>
+</dependency>
+
+
+<!-- https://mvnrepository.com/artifact/org.terrier/terrier-core -->
+<dependency>
+    <groupId>org.terrier</groupId>
+    <artifactId>terrier-core</artifactId>
+    <version>5.6</version>
+    <exclusions>
+        <exclusion>  <!-- declare the exclusion here -->
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-core</artifactId>
+        </exclusion>
+        <exclusion>  <!-- declare the exclusion here -->
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+        </exclusion>
+      </exclusions> 
+</dependency>
+
+<dependency>
+   <groupId>org.apache.commons</groupId>
+   <artifactId>commons-text</artifactId>
+   <version>1.9</version>
+</dependency>
+
+  
+  </dependencies>
+  
+<build>
+    <sourceDirectory>src</sourceDirectory>
+    
+    <resources>
+        <resource>
+            <directory>resources/</directory>
+            <targetPath>${project.build.directory}</targetPath>
+            <includes>
+                <include>logback-test.xml</include>
+            </includes>
+        </resource>
+    </resources>
+    
+    <pluginManagement>
+	<plugins>
+		<!--This plugin's configuration is used to store Eclipse m2e settings only. 
+			It has no influence on the Maven build itself. -->
+		<plugin>
+			<groupId>org.eclipse.m2e</groupId>
+			<artifactId>lifecycle-mapping</artifactId>
+			<version>1.0.0</version>
+			<configuration>
+				<lifecycleMappingMetadata>
+					<pluginExecutions>
+						<pluginExecution>
+							<pluginExecutionFilter>
+								<groupId>org.codehaus.mojo</groupId>
+								<artifactId>aspectj-maven-plugin</artifactId>
+								<versionRange>[1.0,)</versionRange>
+								<goals>
+									<goal>test-compile</goal>
+									<goal>compile</goal>
+								</goals>
+							</pluginExecutionFilter>
+							<action>
+								<execute />
+							</action>
+						</pluginExecution>
+						<pluginExecution>
+							<pluginExecutionFilter>
+								<groupId>
+									org.apache.maven.plugins
+								</groupId>
+								<artifactId>
+									maven-install-plugin
+								</artifactId>
+								<versionRange>
+									[2.5,)
+								</versionRange>
+								<goals>
+									<goal>install-file</goal>
+								</goals>
+							</pluginExecutionFilter>
+							<action>
+								<execute>
+									<runOnIncremental>false</runOnIncremental>
+								</execute>
+							</action>
+						</pluginExecution>
+					</pluginExecutions>
+				</lifecycleMappingMetadata>
+			</configuration>
+		</plugin>
+	</plugins>
+</pluginManagement>
+    
+    <plugins>
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>copy-resources</id>
+            <!-- here the phase you need -->
+            <phase>compile</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${basedir}/target/classes</outputDirectory>
+              <resources>          
+                <resource>
+                  <directory>resources</directory>
+                  <filtering>true</filtering>
+                </resource>
+              </resources>              
+            </configuration>            
+          </execution>
+        </executions>
+      </plugin>
+      
+      <!-- Packages those sources in a Jar file -->
+      <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>1.4</version>
+            <executions>
+                <execution>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>shade</goal>
+                    </goals>
+                    <configuration>
+                        <filters>
+			  				<filter>
+			    				<artifact>*:*</artifact>
+			    				<excludes>
+			      					<exclude>META-INF/*.SF</exclude>
+			      					<exclude>META-INF/*.DSA</exclude>
+			      					<exclude>META-INF/*.RSA</exclude>
+			    				</excludes>
+			  				</filter>
+			 			</filters>
+                         <transformers>
+                            <transformer
+                                implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                <!-- Main class for the Jar file -->
+                                <mainClass>uk.ac.gla.dcs.bigdata.apps.Test</mainClass>
+                            </transformer>
+                            <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                     </transformers>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+      
+    </plugins>
+  </build>
+</project>

@@ -1,3 +1,13 @@
+# Custom
+target
+data
+bin
+.settings
+.classpath
+.metadata
+Notes.docx
+
+
 # Compiled class file
 *.class
 
