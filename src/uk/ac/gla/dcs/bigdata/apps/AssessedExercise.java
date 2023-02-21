@@ -105,6 +105,24 @@ public class AssessedExercise {
 		// Your Spark Topology should be defined here
 		//----------------------------------------------------------------
 		
+		// Debug
+		// long lenghtCorpus = news.count();
+		// System.out.println("Lenght of the Corpus: "+lenghtCorpus);
+		
+		// Debug		
+		// for (int i =0; i<queries.first().getQueryTerms().size(); i++) {
+		// 	System.out.println(queries.first().getQueryTerms().get(i));
+		// 	System.out.println(queries.first().getQueryTermCounts()[i]);
+		// }
+		
+		// 2a. Query aggragetedQueries = queries.reduce(new QueriesReducer());
+		
+		// 3. Reduce ContentItems to have only paragraph text and title by key
+		
+		// - 3.1 Group newsArticle by id
+		NewsToId keyFunction = new NewsToId();
+		KeyValueGroupedDataset<String, NewsArticle> newsById = news.groupByKey(keyFunction, Encoders.STRING());
+		
 		return null; // replace this with the the list of DocumentRanking output by your topology
 	}
 	
