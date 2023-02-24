@@ -1,4 +1,4 @@
-package src.uk.ac.gla.dcs.bigdata.studentfunctions;
+package uk.ac.gla.dcs.bigdata.studentfunctions;
 
 import org.apache.spark.api.java.function.MapFunction;
 

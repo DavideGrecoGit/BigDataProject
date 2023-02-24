@@ -1,6 +1,7 @@
 target
 data
 bin
+.metadata
 .settings
 .classpath
 Notes.docx

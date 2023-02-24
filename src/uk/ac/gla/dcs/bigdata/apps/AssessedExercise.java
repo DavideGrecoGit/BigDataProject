@@ -1,4 +1,4 @@
-package src.uk.ac.gla.dcs.bigdata.apps;
+package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
 import java.util.ArrayList;

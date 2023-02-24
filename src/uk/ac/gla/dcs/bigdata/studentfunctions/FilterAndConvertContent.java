@@ -1,4 +1,4 @@
-package src.uk.ac.gla.dcs.bigdata.studentfunctions;
+package uk.ac.gla.dcs.bigdata.studentfunctions;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -43,45 +43,3 @@ public class FilterAndConvertContent implements FlatMapGroupsFunction<String, Ne
 		return filteredStringContent.iterator();
 	}
 }
-
-//	@Override
-//	public Iterator<SteamGameStats> call(String key, Iterator<SteamGameStats> games) throws Exception {
-//		
-//		List<SteamGameStats> filteredGamesByPrice = new ArrayList<SteamGameStats>();
-//		
-//		// get the list of words
-//		Set<String> stopwords = broadcastStopwords.value();
-//		
-//		boolean supportsMac = key.contains("Mac");
-//		
-//		while (games.hasNext()) {
-//			SteamGameStats game = games.next();
-//			
-//			if (game.getPriceinitial()>=minPrice) {
-//				
-//				filteredGamesByPrice.add(game);
-//				
-//				// now lets calculate the extra statistics we wanted
-//				String description = game.getDetaileddescrip();
-//				if (description!=null) {
-//					
-//					docCountAccumulator.add(1);
-//					
-//					for (String word : description.split(" ")) { // split string on space character
-//						if (!stopwords.contains(word.toLowerCase())) { // if word is not a stopword
-//							
-//							if (supportsMac) wordCountAccumulator.add(1);
-//							
-//						}
-//					}
-//					
-//				}
-//				
-//			}
-//			 
-//		}
-//		
-//		return filteredGamesByPrice.iterator();
-//	}
-//
-//
