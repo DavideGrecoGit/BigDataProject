@@ -5,8 +5,11 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
@@ -145,14 +148,17 @@ public class AssessedExercise {
 		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
 		// broadcast baselineMetrics
 		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(baselineMetrics._2);
-
-		// cojoin newsStats with newsById somehow
-		DPHScorer scorer = new DPHScorer();
+		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(newsStats.count());
+				
+		Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(), Encoders.DOUBLE());
+		Dataset<Tuple2<String, Double>> scoreResults = newsStats.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus), scoreResultEncoder);
 		
-		Encoder<Tuple2<String, RankedResult>> rankedResultEncoder = Encoders.tuple(Encoders.STRING(), Encoders.bean(RankedResult.class));
-		Dataset<Tuple2<String, RankedResult>> rankedResults = newsStats.map(new ScoreMapping(broadcastMetrics), rankedResultEncoder);
+		// now maybe cogroup everything?
+		JavaRDD<Tuple2<String, Double>> scoreRDD = scoreResults.javaRDD();
+		JavaPairRDD<String, Double> pairedScoreRDD = scoreRDD.flatMapToPair(null);
+		pairedScoreRDD.cogroup(null);
 		
-		System.out.println(rankedResults.first()._2.getScore());
+		System.out.println(scoreResults.first()._2);
 		
 		return null; // replace this with the the list of DocumentRanking output by your topology
 	}
