@@ -2,14 +2,12 @@ package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
@@ -18,13 +16,12 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import scala.Tuple2;
+import scala.Tuple3;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedfunctions.QueryFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
-import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
-import uk.ac.gla.dcs.bigdata.providedutilities.DPHScorer;
 import uk.ac.gla.dcs.bigdata.studentfunctions.FilterAndConvertContent;
 import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToId;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
@@ -139,24 +136,28 @@ public class AssessedExercise {
 		
 		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
 		Encoder<Tuple2<String,String>> keyStringEncoder = Encoders.tuple(Encoders.STRING(), Encoders.STRING());
-
 		Dataset<Tuple2<String, String>> stringContentById = newsById.flatMapGroups(stringContentFunction, keyStringEncoder);
 
 		Encoder<Tuple2<String, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.STRING(), Encoders.bean(NewsStatistic.class));
 		Dataset<Tuple2<String, NewsStatistic>> newsStats = stringContentById.flatMap(new StringContentToNewsStatisticMap(), newsEncoder);
 		
+		// baseline metrics
 		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
-		// broadcast baselineMetrics
 		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(baselineMetrics._2);
 		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(newsStats.count());
-				
-		Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(), Encoders.DOUBLE());
-		Dataset<Tuple2<String, Double>> scoreResults = newsStats.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus), scoreResultEncoder);
+			
+//		JavaRDD<Query> queryRDD = queries.javaRDD();
+//		JavaPairRDD<String, NewsStatistic> newsStatRDD = newsStats.javaRDD().flatMapToPair(null);
+//		JavaPairRDD<String, Query> pairedQueriesRDD = queries.javaRDD().flatMapToPair(null);
+//		JavaPairRDD<String, Tuple2<Query, NewsStatistic>> newRDD = pairedQueriesRDD.join(newsStatRDD);
+//		newRDD.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus));
+
+		queries.foreach((query) -> {
+			Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(), Encoders.DOUBLE());
+			Dataset<Tuple2<String, Double>> scoreResults = newsStats.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus, query), scoreResultEncoder);
+
+		});
 		
-		// now maybe cogroup everything?
-		JavaRDD<Tuple2<String, Double>> scoreRDD = scoreResults.javaRDD();
-		JavaPairRDD<String, Double> pairedScoreRDD = scoreRDD.flatMapToPair(null);
-		pairedScoreRDD.cogroup(null);
 		
 		System.out.println(scoreResults.first()._2);
 		
