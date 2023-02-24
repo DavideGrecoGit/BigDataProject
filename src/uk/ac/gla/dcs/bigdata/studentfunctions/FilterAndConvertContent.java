@@ -1,4 +1,4 @@
-package uk.ac.gla.dcs.bigdata.studentfunctions;
+package src.uk.ac.gla.dcs.bigdata.studentfunctions;
 
 import java.util.ArrayList;
 import java.util.Iterator;
