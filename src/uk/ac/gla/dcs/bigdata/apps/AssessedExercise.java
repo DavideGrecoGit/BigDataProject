@@ -1,9 +1,12 @@
 package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
@@ -17,8 +20,14 @@ import uk.ac.gla.dcs.bigdata.providedfunctions.QueryFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
+import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
+import uk.ac.gla.dcs.bigdata.providedutilities.DPHScorer;
 import uk.ac.gla.dcs.bigdata.studentfunctions.FilterAndConvertContent;
 import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToId;
+import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
+import uk.ac.gla.dcs.bigdata.studentfunctions.ScoreMapping;
+import uk.ac.gla.dcs.bigdata.studentfunctions.StringContentToNewsStatisticMap;
+import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
 /**
  * This is the main class where your Spark topology should be specified.
@@ -126,13 +135,24 @@ public class AssessedExercise {
 		// - 3.2 Transform List<ContentItem> into String, keep grouping by id
 		
 		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
-		
 		Encoder<Tuple2<String,String>> keyStringEncoder = Encoders.tuple(Encoders.STRING(), Encoders.STRING());
 
 		Dataset<Tuple2<String, String>> stringContentById = newsById.flatMapGroups(stringContentFunction, keyStringEncoder);
+
+		Encoder<Tuple2<String, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.STRING(), Encoders.bean(NewsStatistic.class));
+		Dataset<Tuple2<String, NewsStatistic>> newsStats = stringContentById.flatMap(new StringContentToNewsStatisticMap(), newsEncoder);
 		
-		// Debug
-		System.out.print(stringContentById.first());
+		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
+		// broadcast baselineMetrics
+		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(baselineMetrics._2);
+
+		// cojoin newsStats with newsById somehow
+		DPHScorer scorer = new DPHScorer();
+		
+		Encoder<Tuple2<String, RankedResult>> rankedResultEncoder = Encoders.tuple(Encoders.STRING(), Encoders.bean(RankedResult.class));
+		Dataset<Tuple2<String, RankedResult>> rankedResults = newsStats.map(new ScoreMapping(broadcastMetrics), rankedResultEncoder);
+		
+		System.out.println(rankedResults.first()._2.getScore());
 		
 		return null; // replace this with the the list of DocumentRanking output by your topology
 	}
