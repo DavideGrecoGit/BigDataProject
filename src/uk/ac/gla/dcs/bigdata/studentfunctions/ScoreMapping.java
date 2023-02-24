@@ -23,16 +23,20 @@ public class ScoreMapping implements MapFunction<Tuple2<String, NewsStatistic>, 
 	}
 
 	@Override
-	public Tuple2<String, Double> call(Tuple2<String, NewsStatistic> value) throws Exception {
+	public Tuple2<String, Double> call(Tuple2<String, NewsStatistic> value){
 		double totalScore = 0;
 		for(int i = 0; i < query.getQueryTerms().size(); i++) { // should be query
 			String word = query.getQueryTerms().get(i);
-			totalScore += DPHScorer.getDPHScore(
-					value._2.getTermFrequencyMap().get(word).shortValue(),
-					baseMetrics.getTermFrequencyMap().get(word), 
-					value._2.getDocLength(),
-					baseMetrics.getDocLength() / totalDocsInCorpus,
-					totalDocsInCorpus);
+			try {
+				totalScore += DPHScorer.getDPHScore(
+						value._2.getTermFrequencyMap().get(word).shortValue(),
+						baseMetrics.getTermFrequencyMap().get(word), 
+						value._2.getDocLength(),
+						baseMetrics.getDocLength() / totalDocsInCorpus,
+						totalDocsInCorpus);
+			} catch(Exception e) {
+				e.printStackTrace();
+			}
 		}
 		return new Tuple2<String, Double>(value._1, totalScore);
 	}

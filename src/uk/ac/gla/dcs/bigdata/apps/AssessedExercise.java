@@ -156,13 +156,15 @@ public class AssessedExercise {
 				Encoders.bean(NewsStatistic.class));
 		Dataset<Tuple2<String, NewsStatistic>> newsStats = stringContentById
 				.flatMap(new StringContentToNewsStatisticMap(), newsEncoder);
-
+		
 		// baseline metrics
 		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
 		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext())
 				.broadcast(baselineMetrics._2);
 		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext())
 				.broadcast(newsStats.count());
+
+		List<Query> serialisedQueries = queries.collectAsList();
 
 //		JavaRDD<Query> queryRDD = queries.javaRDD();
 //		JavaPairRDD<String, NewsStatistic> newsStatRDD = newsStats.javaRDD().flatMapToPair(null);
@@ -172,34 +174,36 @@ public class AssessedExercise {
 
 		List<DocumentRanking> finalList = new ArrayList<DocumentRanking>();
 		// For each query in the dataset...
-		queries.foreach(new ForeachFunction<Query>() {
-			private static final long serialVersionUID = 1L;
+		
+		for (Query query : serialisedQueries) {
+			// Calculate DPH scores
+			Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(),
+					Encoders.DOUBLE());
+			Dataset<Tuple2<String, Double>> scoreResults = newsStats
+					.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus, query), scoreResultEncoder);
+			// Sort the dataset by score and build its iterator
+			Dataset<Tuple2<String, Double>> sortedScoreResults = scoreResults.orderBy(functions.desc("_2"));
+			Iterator<Tuple2<String, Double>> resultIterator = sortedScoreResults.toLocalIterator();
+			// Build a list of RankedResults which are non-similar
+			List<RankedResult> resultsList = new ArrayList<RankedResult>();
+			IdToNews idToNews = new IdToNews();
+			IdToContent idToContent = new IdToContent();
 
-			@Override
-			public void call(Query query) throws Exception {
-				// Calculate DPH scores
-				Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(),
-						Encoders.DOUBLE());
-				Dataset<Tuple2<String, Double>> scoreResults = newsStats
-						.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus, query), scoreResultEncoder);
-				// Sort the dataset by score and build its iterator
-				Dataset<Tuple2<String, Double>> sortedScoreResults = scoreResults.orderBy(functions.desc("_2"));
-				Iterator<Tuple2<String, Double>> resultIterator = sortedScoreResults.toLocalIterator();
-				// Build a list of RankedResults which are non-similar
-				List<RankedResult> resultsList = new ArrayList<RankedResult>();
-				IdToNews idToNews = new IdToNews();
-				IdToContent idToContent = new IdToContent();
-
-				// Until the size of the list is not 10...
-				while (resultsList.size() <= 10) {
-					Tuple2<String, Double> currResult = resultIterator.next();
+			// Until the size of the list is not 10...
+			while (resultsList.size() <= 10) {
+				Tuple2<String, Double> currResult = resultIterator.next();
+				
+				try {
 					// Get the current article object
 					NewsArticle currArticle = idToNews.getArticle(currResult._1, newsById);
 					// Get its content
-					String currContent = idToContent.getContent(currResult._1, stringContentById);
+					String currContent;
+				
+					currContent = idToContent.getContent(currResult._1, stringContentById);
+				
 					// Create RankedResults object
 					RankedResult result = new RankedResult(currResult._1, currArticle, currResult._2);
-
+	
 					// Base case: add first item to the list
 					if (resultsList.isEmpty()) {
 						resultsList.add(result);
@@ -218,14 +222,16 @@ public class AssessedExercise {
 							resultsList.add(result);
 						}
 					}
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
-				// Create DocumentRanking object
-				DocumentRanking docRanking = new DocumentRanking(query, resultsList);
-				// Add the this to the final list
-				finalList.add(docRanking);
 			}
-
-		});
+			// Create DocumentRanking object
+			DocumentRanking docRanking = new DocumentRanking(query, resultsList);
+			// Add the this to the final list
+			finalList.add(docRanking);
+		}
 
 		return finalList;
 	}
