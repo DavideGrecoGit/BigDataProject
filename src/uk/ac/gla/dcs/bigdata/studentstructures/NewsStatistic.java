@@ -24,13 +24,24 @@ public class NewsStatistic implements Serializable {
 	public void setTermFrequencyMap(HashMap<String, Integer> termFrequencyMap) {
 		this.termFrequencyMap = termFrequencyMap;
 	}
-
+	
 	public int getDocLength() {
 		return docLength;
 	}
 
 	public void setDocLength(int docLength) {
 		this.docLength = docLength;
+	}
+
+	public void incrementDocLenght(){
+		this.docLength = this.docLength + 1;
+	}
+
+	public Boolean isEmpty(){
+		if(this.docLength == 0){
+			return true;
+		}
+		return false;
 	}
 
 }

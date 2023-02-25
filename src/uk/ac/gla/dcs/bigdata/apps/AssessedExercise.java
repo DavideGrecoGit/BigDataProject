@@ -20,12 +20,11 @@ import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
-import uk.ac.gla.dcs.bigdata.studentfunctions.FilterAndConvertContent;
+import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToArticlesStatsFlatMap;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoreMapping;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToId;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToResults;
-import uk.ac.gla.dcs.bigdata.studentfunctions.StringContentToNewsStatisticMap;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
 /**
@@ -126,32 +125,26 @@ public class AssessedExercise {
 		// System.out.println("--------- Queries: "+lenghtQueries);
 
 		// Get StringContent from NewsArticle 
-		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
-		Encoder<Tuple2<NewsArticle, String>> newsArticlesEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.STRING());
-		Dataset<Tuple2<NewsArticle, String>> stringContentByArticle = news.flatMap(stringContentFunction, newsArticlesEncoder);
-		
-		// System.out.println("------ StringContent Articles "+stringContentByArticle.count()+" ------");
-
-		// Calculate Statistics of each NewsArticle
+		NewsToArticlesStatsFlatMap stringContentFunction = new NewsToArticlesStatsFlatMap();
 		Encoder<Tuple2<NewsArticle, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.bean(NewsStatistic.class));
-		Dataset<Tuple2<NewsArticle, NewsStatistic>> newsStats = stringContentByArticle.map(new StringContentToNewsStatisticMap(), newsEncoder);
+		Dataset<Tuple2<NewsArticle, NewsStatistic>> articleStats = news.flatMap(stringContentFunction, newsEncoder);
 		
-		System.out.println("======================= Stats Articles"+newsStats.count()+" =======================");
+		System.out.println("------ StringContent Articles "+articleStats.count()+" ------");
 
 		// baseline metrics
-		Tuple2<NewsArticle, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
+		Tuple2<NewsArticle, NewsStatistic> baselineMetrics = articleStats.reduce(new ReduceNewsStatistic());
 		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext())
 				.broadcast(baselineMetrics._2);
 		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext())
-				.broadcast(newsStats.count());
+				.broadcast(articleStats.count());
 
 		List<Query> serialisedQueries = queries.collectAsList();
 		Broadcast<List<Query>> broadcastQueries = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(serialisedQueries);
 		
-		// newsStats (<String, NewsStatistic>) to resultScores (<Query, String, Double>)
+		// articleStats (<String, NewsStatistic>) to resultScores (<Query, String, Double>)
 		ScoreMapping newsToScore = new ScoreMapping(broadcastMetrics, totalDocsInCorpus, broadcastQueries);
 		Encoder<Tuple2<Query, RankedResult>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class), Encoders.bean(RankedResult.class));
-		Dataset<Tuple2<Query, RankedResult>> resultScores = newsStats.flatMap(newsToScore, resultScoresEncoder);
+		Dataset<Tuple2<Query, RankedResult>> resultScores = articleStats.flatMap(newsToScore, resultScoresEncoder);
 		
 		System.out.println("======================= "+resultScores.count()+" =======================");
 
