@@ -12,6 +12,7 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.KeyValueGroupedDataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.util.LongAccumulator;
 
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
@@ -124,40 +125,45 @@ public class AssessedExercise {
 		// long lenghtQueries = queries.count();
 		// System.out.println("--------- Queries: "+lenghtQueries);
 
+		// Corpus lenght counter
+		LongAccumulator totalDocsInCorpus = spark.sparkContext().longAccumulator();
+
 		// Get StringContent from NewsArticle 
-		NewsToArticlesStatsFlatMap stringContentFunction = new NewsToArticlesStatsFlatMap();
+		NewsToArticlesStatsFlatMap stringContentFunction = new NewsToArticlesStatsFlatMap(totalDocsInCorpus);
 		Encoder<Tuple2<NewsArticle, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.bean(NewsStatistic.class));
 		Dataset<Tuple2<NewsArticle, NewsStatistic>> articleStats = news.flatMap(stringContentFunction, newsEncoder);
 		
-		System.out.println("------ StringContent Articles "+articleStats.count()+" ------");
+		// Debug
+		// System.out.println("------ StringContent Articles "+articleStats.count()+" ------");
 
 		// baseline metrics
-		Tuple2<NewsArticle, NewsStatistic> baselineMetrics = articleStats.reduce(new ReduceNewsStatistic());
-		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext())
-				.broadcast(baselineMetrics._2);
-		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext())
-				.broadcast(articleStats.count());
+		Tuple2<NewsArticle, NewsStatistic> corpusStats = articleStats.reduce(new ReduceNewsStatistic());
+		Broadcast<NewsStatistic> broadcastCorpusStats = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(corpusStats._2());
 
 		List<Query> serialisedQueries = queries.collectAsList();
 		Broadcast<List<Query>> broadcastQueries = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(serialisedQueries);
 		
 		// articleStats (<String, NewsStatistic>) to resultScores (<Query, String, Double>)
-		ScoreMapping newsToScore = new ScoreMapping(broadcastMetrics, totalDocsInCorpus, broadcastQueries);
+		ScoreMapping newsToScore = new ScoreMapping(broadcastCorpusStats, totalDocsInCorpus, broadcastQueries);
 		Encoder<Tuple2<Query, RankedResult>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class), Encoders.bean(RankedResult.class));
 		Dataset<Tuple2<Query, RankedResult>> resultScores = articleStats.flatMap(newsToScore, resultScoresEncoder);
 		
-		System.out.println("======================= "+resultScores.count()+" =======================");
+		// Debug
+		// System.out.println("======================= "+resultScores.count()+" =======================");
 
 		ScoresToId groupByQuery = new ScoresToId();
 		KeyValueGroupedDataset <Query, Tuple2<Query, RankedResult>> results = resultScores.groupByKey(groupByQuery, Encoders.bean(Query.class)); 
 		
-		System.out.println("======================= "+results.count().count()+" =======================");
+		// Debug
+		// System.out.println("======================= "+results.count().count()+" =======================");
 		
 		ScoresToResults scoresToResults = new ScoresToResults();
 		Encoder<DocumentRanking> rankedResultsEncoder = Encoders.bean(DocumentRanking.class);
 		Dataset<DocumentRanking> rankedResults = results.mapGroups(scoresToResults, rankedResultsEncoder);
 
-		System.out.println("======================= Ranked Results count "+rankedResults.count()+" =======================");
+		// Debug
+		// System.out.println("======================= Ranked Results count "+rankedResults.count()+" =======================");
 
 		return rankedResults.collectAsList();
 	}
