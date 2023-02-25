@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.util.LongAccumulator;
 
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedstructures.ContentItem;
@@ -18,11 +19,20 @@ public class NewsToArticlesStatsFlatMap implements FlatMapFunction<NewsArticle, 
 
 	private static final long serialVersionUID = 6882302572907096250L;
 	
+	LongAccumulator totalDocsInCorpus;
+
+	public NewsToArticlesStatsFlatMap(LongAccumulator totalDocsInCorpus){
+		this.totalDocsInCorpus = totalDocsInCorpus;
+	}
+
 	@Override
 	public Iterator<Tuple2<NewsArticle, NewsStatistic>> call(NewsArticle article) throws Exception {
 		List<Tuple2<NewsArticle, NewsStatistic>> filteredStringContent = new ArrayList<Tuple2<NewsArticle, NewsStatistic>>();
-		
+
 		if(isArticleValid(article)){
+
+			// Count only valid articles
+			totalDocsInCorpus.add(1);
 			
 			NewsStatistic stats = new NewsStatistic(new HashMap<String, Integer>(), 0);
 			int i = 0;
