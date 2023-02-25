@@ -128,7 +128,7 @@ public class AssessedExercise {
 		// Get StringContent from NewsArticle 
 		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
 		Encoder<Tuple2<NewsArticle, String>> newsArticlesEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.STRING());
-		Dataset<Tuple2<NewsArticle, String>> stringContentByArticle = news.map(stringContentFunction, newsArticlesEncoder);
+		Dataset<Tuple2<NewsArticle, String>> stringContentByArticle = news.flatMap(stringContentFunction, newsArticlesEncoder);
 		
 		// System.out.println("------ StringContent Articles "+stringContentByArticle.count()+" ------");
 
