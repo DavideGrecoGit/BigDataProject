@@ -1,6 +1,7 @@
 target
 data
 bin
+results
 .metadata
 .settings
 .classpath

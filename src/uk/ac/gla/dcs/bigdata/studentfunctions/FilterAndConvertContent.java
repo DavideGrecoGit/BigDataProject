@@ -5,41 +5,36 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.spark.api.java.function.FlatMapGroupsFunction;
+import org.apache.spark.api.java.function.MapFunction;
 
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedstructures.ContentItem;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedutilities.TextPreProcessor;
 
-public class FilterAndConvertContent implements FlatMapGroupsFunction<String, NewsArticle, Tuple2<String, String>>{
+public class FilterAndConvertContent implements MapFunction<NewsArticle, Tuple2<NewsArticle, String>>{
 
 	private static final long serialVersionUID = 6882302572907096250L;
 	
 	@Override
-	public Iterator<Tuple2<String, String>> call(String key, Iterator<NewsArticle> values) throws Exception {
+	public Tuple2<NewsArticle, String> call(NewsArticle values) throws Exception {
 		TextPreProcessor textProcessor = new TextPreProcessor();
-		List<Tuple2<String, String>> filteredStringContent = new ArrayList<Tuple2<String, String>>();
+			
+		StringBuilder contentBuilder = new StringBuilder();
 		
-		while(values.hasNext()) {
+		for (ContentItem content : values.getContents()) {
 			
-			NewsArticle article = values.next();
 			
-			StringBuilder contentBuilder = new StringBuilder();
-			
-			for (ContentItem content : article.getContents()) {
-				
-				
-				if(content.getType().equals("title") || (content.getSubtype()!=null && content.getSubtype().equals("paragraph"))) {
-					contentBuilder.append(" ");  // make sure there's spacing between all words
-					contentBuilder.append(textProcessor.process(content.getContent()));
-				}
-			}
-			
-			if(contentBuilder.length()!=0) {
-				filteredStringContent.add(new Tuple2<String,String>(key,contentBuilder.toString()));
+			if(content.getType().equals("title") || (content.getSubtype()!=null && content.getSubtype().equals("paragraph"))) {
+				contentBuilder.append(" ");  // make sure there's spacing between all words
+				contentBuilder.append(textProcessor.process(content.getContent()));
 			}
 		}
+		
+		if(contentBuilder.length()!=0) {
+			return new Tuple2<NewsArticle,String>(values ,contentBuilder.toString());
+		}
 	 	
-		return filteredStringContent.iterator();
+		return new Tuple2<NewsArticle,String>(values, "");
 	}
 }

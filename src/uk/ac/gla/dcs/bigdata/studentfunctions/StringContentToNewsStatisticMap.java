@@ -5,25 +5,24 @@ import java.util.HashMap;
 import java.util.Iterator;
 
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.MapFunction;
 import org.terrier.indexing.tokenisation.Tokeniser;
 import org.terrier.terms.BaseTermPipelineAccessor;
 
 import scala.Tuple2;
+import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
-public class StringContentToNewsStatisticMap implements FlatMapFunction<Tuple2<String, String>, Tuple2<String, NewsStatistic>> {
+public class StringContentToNewsStatisticMap implements MapFunction<Tuple2<NewsArticle, String>, Tuple2<NewsArticle, NewsStatistic>> {
 
 	private static final long serialVersionUID = -7006056215226895981L;
 	
 	private int currentDocCount = 0;
 	
 	@Override
-	public Iterator<Tuple2<String, NewsStatistic>> call(Tuple2<String, String> value) throws Exception {
+	public Tuple2<NewsArticle, NewsStatistic> call(Tuple2<NewsArticle, String> value) throws Exception {
 		String content = value._2;
-		ArrayList<Tuple2<String, NewsStatistic>> result = new ArrayList<Tuple2<String, NewsStatistic>>();
-		result.add(new Tuple2<String, NewsStatistic>(value._1, new NewsStatistic(process(content), currentDocCount)));
-		currentDocCount = 0;
-		return result.iterator();
+		return new Tuple2<NewsArticle, NewsStatistic>(value._1, new NewsStatistic(process(content), currentDocCount));
 	}
 	
 	

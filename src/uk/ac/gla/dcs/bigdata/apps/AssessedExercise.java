@@ -34,7 +34,6 @@ import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToId;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToResults;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StringContentToNewsStatisticMap;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
-import uk.ac.gla.dcs.bigdata.studentstructures.RankedResultsList;
 
 /**
  * This is the main class where your Spark topology should be specified.
@@ -131,10 +130,11 @@ public class AssessedExercise {
 
 		// Debug
 		// long lenghtCorpus = news.count();
-		// System.out.println("Lenght of the Corpus: "+lenghtCorpus);
+		// System.out.println("--------- Corpus: "+lenghtCorpus);
 
-		long lenghtQueries = queries.count();
-		System.out.println("Lenght of the Corpus: "+lenghtQueries);
+		// Debug
+		// long lenghtQueries = queries.count();
+		// System.out.println("--------- Queries: "+lenghtQueries);
 
 		// Debug
 		// for (int i =0; i<queries.first().getQueryTerms().size(); i++) {
@@ -147,23 +147,24 @@ public class AssessedExercise {
 		// 3. Reduce ContentItems to have only paragraph text and title by key
 
 		// - 3.1 Group newsArticle by id
-		NewsToId keyFunction = new NewsToId();
-		KeyValueGroupedDataset<String, NewsArticle> newsById = news.groupByKey(keyFunction, Encoders.STRING());
+		// NewsToId keyFunction = new NewsToId();
+		// KeyValueGroupedDataset<String, NewsArticle> newsById = news.groupByKey(keyFunction, Encoders.STRING());
 
 		// - 3.2 Transform List<ContentItem> into String, keep grouping by id
 
 		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
-		Encoder<Tuple2<String, String>> keyStringEncoder = Encoders.tuple(Encoders.STRING(), Encoders.STRING());
-		Dataset<Tuple2<String, String>> stringContentById = newsById.flatMapGroups(stringContentFunction,
-				keyStringEncoder);
+		Encoder<Tuple2<NewsArticle, String>> newsArticlesEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.STRING());
+		Dataset<Tuple2<NewsArticle, String>> stringContentByArticle = news.map(stringContentFunction, newsArticlesEncoder);
+		
+		// System.out.println("------ "+stringContentByArticle.count()+" ------");
 
-		Encoder<Tuple2<String, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.STRING(),
-				Encoders.bean(NewsStatistic.class));
-		Dataset<Tuple2<String, NewsStatistic>> newsStats = stringContentById
-				.flatMap(new StringContentToNewsStatisticMap(), newsEncoder);
+		Encoder<Tuple2<NewsArticle, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.bean(NewsStatistic.class));
+		Dataset<Tuple2<NewsArticle, NewsStatistic>> newsStats = stringContentByArticle.map(new StringContentToNewsStatisticMap(), newsEncoder);
+		
+		System.out.println("------ "+newsStats.count()+" ------");
 
 		// baseline metrics
-		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
+		Tuple2<NewsArticle, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
 		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext())
 				.broadcast(baselineMetrics._2);
 		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext())
@@ -174,11 +175,13 @@ public class AssessedExercise {
 		
 		// newsStats (<String, NewsStatistic>) to resultScores (<Query, String, Double>)
 		ScoreMapping newsToScore = new ScoreMapping(broadcastMetrics, totalDocsInCorpus, broadcastQueries);
-		Encoder<Tuple3<Query, String, Double>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class), Encoders.STRING(), Encoders.DOUBLE());
-		Dataset<Tuple3<Query, String, Double>> resultScores = newsStats.flatMap(newsToScore, resultScoresEncoder);
+		Encoder<Tuple2<Query, RankedResult>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class), Encoders.bean(RankedResult.class));
+		Dataset<Tuple2<Query, RankedResult>> resultScores = newsStats.flatMap(newsToScore, resultScoresEncoder);
+		
+		System.out.println("------ "+resultScores.count()+" ------");
 
 		ScoresToId groupByQuery = new ScoresToId();
-		KeyValueGroupedDataset <Query, Tuple3<Query, String, Double>> results = resultScores.groupByKey(groupByQuery, Encoders.bean(Query.class)); 
+		KeyValueGroupedDataset <Query, Tuple2<Query, RankedResult>> results = resultScores.groupByKey(groupByQuery, Encoders.bean(Query.class)); 
 		
 		System.out.println("======================= "+results.count().count()+" =======================");
 		
@@ -188,9 +191,7 @@ public class AssessedExercise {
 
 		System.out.println("||||||||||||||||| "+rankedResults.count()+" |||||||||||||||||");
 
-		List<DocumentRanking> finalList = rankedResults.collectAsList();
-		
-		return null;
+		return rankedResults.collectAsList();
 	}
 
 }

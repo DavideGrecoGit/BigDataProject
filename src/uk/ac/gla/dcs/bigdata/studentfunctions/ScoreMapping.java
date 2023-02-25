@@ -4,15 +4,19 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.validation.constraints.Null;
+
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 
 import scala.Tuple2;
 import scala.Tuple3;
+import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
+import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
-public class ScoreMapping implements FlatMapFunction<Tuple2<String, NewsStatistic>, Tuple3<Query, String, Double>>{
+public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsStatistic>, Tuple2<Query, RankedResult>>{
     
     private static final long serialVersionUID = 8738159622158851426L;
 	
@@ -32,11 +36,11 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<String, NewsStatisti
      * @throws Exception
      */
     @Override
-    public Iterator<Tuple3<Query, String, Double>> call(Tuple2<String, NewsStatistic> value) throws Exception {
+    public Iterator<Tuple2<Query, RankedResult>> call(Tuple2<NewsArticle, NewsStatistic> value) throws Exception {
         Double max = 100.0;
         Double min = 0.0;
 
-        List<Tuple3<Query, String, Double>> resultsList = new ArrayList<Tuple3<Query, String, Double>>();
+        List<Tuple2<Query, RankedResult>> resultsList = new ArrayList<Tuple2<Query, RankedResult>>();
 
         for(Query query : this.queries){
 
@@ -52,10 +56,12 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<String, NewsStatisti
             //         baseMetrics.getDocLength() / totalDocsInCorpus,
             //         totalDocsInCorpus);
             // }
-
-            Double totalScore = Math.floor(Math.random() * (max - min + 1) + min);
-
-            resultsList.add(new Tuple3<Query, String, Double>(query, value._1(), totalScore));
+            
+            if(value._1() != null){
+                Double totalScore = Math.floor(Math.random() * (max - min + 1) + min);
+                resultsList.add(new Tuple2<Query, RankedResult>(query, new RankedResult(value._1().getId(), value._1(), totalScore)));
+            }
+            
         }
         
         return resultsList.iterator();
