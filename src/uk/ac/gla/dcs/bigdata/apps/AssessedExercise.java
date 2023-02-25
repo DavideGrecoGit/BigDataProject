@@ -181,8 +181,14 @@ public class AssessedExercise {
 		KeyValueGroupedDataset <Query, Tuple3<Query, String, Double>> results = resultScores.groupByKey(groupByQuery, Encoders.bean(Query.class)); 
 		
 		System.out.println("======================= "+results.count().count()+" =======================");
-	
-		List<DocumentRanking> finalList = new ArrayList<DocumentRanking>();
+		
+		ScoresToResults scoresToResults = new ScoresToResults();
+		Encoder<DocumentRanking> rankedResultsEncoder = Encoders.bean(DocumentRanking.class);
+		Dataset<DocumentRanking> rankedResults = results.mapGroups(scoresToResults, rankedResultsEncoder);
+
+		System.out.println("||||||||||||||||| "+rankedResults.count()+" |||||||||||||||||");
+
+		List<DocumentRanking> finalList = rankedResults.collectAsList();
 		
 		return null;
 	}
