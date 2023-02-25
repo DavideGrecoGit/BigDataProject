@@ -41,7 +41,7 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsSta
 
                 for (String word : query.getQueryTerms()){
                     if(value._2.getTermFrequencyMap().containsKey(word)){
-                        totalScore = totalScore + DPHScorer.getDPHScore(
+                        totalScore += DPHScorer.getDPHScore(
                             value._2.getTermFrequencyMap().get(word).shortValue(),
                             baseMetrics.getTermFrequencyMap().get(word), 
                             value._2.getDocLength(),
