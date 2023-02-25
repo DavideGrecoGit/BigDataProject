@@ -1,8 +1,6 @@
 package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.apache.spark.SparkConf;
@@ -16,18 +14,13 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import scala.Tuple2;
-import scala.Tuple3;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedfunctions.QueryFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
-import uk.ac.gla.dcs.bigdata.providedutilities.TextDistanceCalculator;
 import uk.ac.gla.dcs.bigdata.studentfunctions.FilterAndConvertContent;
-import uk.ac.gla.dcs.bigdata.studentfunctions.IdToContent;
-import uk.ac.gla.dcs.bigdata.studentfunctions.IdToNews;
-import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToId;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoreMapping;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToId;
@@ -113,16 +106,12 @@ public class AssessedExercise {
 		Dataset<Row> queriesjson = spark.read().text(queryFile);
 		Dataset<Row> newsjson = spark.read().text(newsFile); // read in files as string rows, one row per article
 
-		// Perform an initial conversion from Dataset<Row> to Query and NewsArticle Java
-		// objects
-		Dataset<Query> queries = queriesjson.map(new QueryFormaterMap(), Encoders.bean(Query.class)); // this converts
-																										// each row into
-																										// a Query
-		Dataset<NewsArticle> news = newsjson.map(new NewsFormaterMap(), Encoders.bean(NewsArticle.class)); // this
-																											// converts
-																											// each row
-																											// into a
-																											// NewsArticle
+		// Perform an initial conversion from Dataset<Row> to Query and NewsArticle Java objects
+		
+		// this converts each row into a Query
+		Dataset<Query> queries = queriesjson.map(new QueryFormaterMap(), Encoders.bean(Query.class)); 
+		// this converts each row into a NewsArticle
+		Dataset<NewsArticle> news = newsjson.map(new NewsFormaterMap(), Encoders.bean(NewsArticle.class)); 
 
 		// ----------------------------------------------------------------
 		// Your Spark Topology should be defined here
@@ -136,32 +125,18 @@ public class AssessedExercise {
 		// long lenghtQueries = queries.count();
 		// System.out.println("--------- Queries: "+lenghtQueries);
 
-		// Debug
-		// for (int i =0; i<queries.first().getQueryTerms().size(); i++) {
-		// System.out.println(queries.first().getQueryTerms().get(i));
-		// System.out.println(queries.first().getQueryTermCounts()[i]);
-		// }
-
-		// 2a. Query aggragetedQueries = queries.reduce(new QueriesReducer());
-
-		// 3. Reduce ContentItems to have only paragraph text and title by key
-
-		// - 3.1 Group newsArticle by id
-		// NewsToId keyFunction = new NewsToId();
-		// KeyValueGroupedDataset<String, NewsArticle> newsById = news.groupByKey(keyFunction, Encoders.STRING());
-
-		// - 3.2 Transform List<ContentItem> into String, keep grouping by id
-
+		// Get StringContent from NewsArticle 
 		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
 		Encoder<Tuple2<NewsArticle, String>> newsArticlesEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.STRING());
 		Dataset<Tuple2<NewsArticle, String>> stringContentByArticle = news.map(stringContentFunction, newsArticlesEncoder);
 		
-		// System.out.println("------ "+stringContentByArticle.count()+" ------");
+		// System.out.println("------ StringContent Articles "+stringContentByArticle.count()+" ------");
 
+		// Calculate Statistics of each NewsArticle
 		Encoder<Tuple2<NewsArticle, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class), Encoders.bean(NewsStatistic.class));
 		Dataset<Tuple2<NewsArticle, NewsStatistic>> newsStats = stringContentByArticle.map(new StringContentToNewsStatisticMap(), newsEncoder);
 		
-		System.out.println("------ "+newsStats.count()+" ------");
+		System.out.println("======================= Stats Articles"+newsStats.count()+" =======================");
 
 		// baseline metrics
 		Tuple2<NewsArticle, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
@@ -178,7 +153,7 @@ public class AssessedExercise {
 		Encoder<Tuple2<Query, RankedResult>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class), Encoders.bean(RankedResult.class));
 		Dataset<Tuple2<Query, RankedResult>> resultScores = newsStats.flatMap(newsToScore, resultScoresEncoder);
 		
-		System.out.println("------ "+resultScores.count()+" ------");
+		System.out.println("======================= "+resultScores.count()+" =======================");
 
 		ScoresToId groupByQuery = new ScoresToId();
 		KeyValueGroupedDataset <Query, Tuple2<Query, RankedResult>> results = resultScores.groupByKey(groupByQuery, Encoders.bean(Query.class)); 
@@ -189,7 +164,7 @@ public class AssessedExercise {
 		Encoder<DocumentRanking> rankedResultsEncoder = Encoders.bean(DocumentRanking.class);
 		Dataset<DocumentRanking> rankedResults = results.mapGroups(scoresToResults, rankedResultsEncoder);
 
-		System.out.println("||||||||||||||||| "+rankedResults.count()+" |||||||||||||||||");
+		System.out.println("======================= Ranked Results count "+rankedResults.count()+" =======================");
 
 		return rankedResults.collectAsList();
 	}

@@ -1,13 +1,7 @@
 package uk.ac.gla.dcs.bigdata.studentfunctions;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
-
-import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.MapFunction;
-import org.terrier.indexing.tokenisation.Tokeniser;
-import org.terrier.terms.BaseTermPipelineAccessor;
 
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;

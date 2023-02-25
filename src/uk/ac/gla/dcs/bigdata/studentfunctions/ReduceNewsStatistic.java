@@ -4,7 +4,6 @@ import java.util.HashMap;
 
 import org.apache.spark.api.java.function.ReduceFunction;
 
-import scala.Function2;
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;

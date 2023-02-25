@@ -1,10 +1,4 @@
 package uk.ac.gla.dcs.bigdata.studentfunctions;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import org.apache.spark.api.java.function.FlatMapGroupsFunction;
 import org.apache.spark.api.java.function.MapFunction;
 
 import scala.Tuple2;

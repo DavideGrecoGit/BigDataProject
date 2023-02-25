@@ -4,16 +4,14 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import javax.validation.constraints.Null;
-
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 
 import scala.Tuple2;
-import scala.Tuple3;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
+import uk.ac.gla.dcs.bigdata.providedutilities.DPHScorer;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
 public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsStatistic>, Tuple2<Query, RankedResult>>{
@@ -46,19 +44,20 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsSta
 
             // Using dummy score since the following gives NullPointerException
             
-            // double totalScore = 0;
-
-            // for (String word : query.getQueryTerms()){
-            //     totalScore += DPHScorer.getDPHScore(
-            //         value._2.getTermFrequencyMap().get(word).shortValue(),
-            //         baseMetrics.getTermFrequencyMap().get(word), 
-            //         value._2.getDocLength(),
-            //         baseMetrics.getDocLength() / totalDocsInCorpus,
-            //         totalDocsInCorpus);
-            // }
-            
             if(value._1() != null){
-                Double totalScore = Math.floor(Math.random() * (max - min + 1) + min);
+            
+                double totalScore = 0;
+
+                for (String word : query.getQueryTerms()){
+                    totalScore += DPHScorer.getDPHScore(
+                        value._2.getTermFrequencyMap().get(word).shortValue(),
+                        baseMetrics.getTermFrequencyMap().get(word), 
+                        value._2.getDocLength(),
+                        baseMetrics.getDocLength() / totalDocsInCorpus,
+                        totalDocsInCorpus);
+                }
+                
+                // Double totalScore = Math.floor(Math.random() * (max - min + 1) + min);
                 resultsList.add(new Tuple2<Query, RankedResult>(query, new RankedResult(value._1().getId(), value._1(), totalScore)));
             }
             
