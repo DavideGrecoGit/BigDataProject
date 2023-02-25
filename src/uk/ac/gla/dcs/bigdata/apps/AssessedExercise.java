@@ -8,6 +8,7 @@ import java.util.List;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.ForeachFunction;
+import org.apache.spark.api.java.function.ForeachPartitionFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
@@ -18,6 +19,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
 
 import scala.Tuple2;
+import scala.Tuple3;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedfunctions.QueryFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
@@ -31,6 +33,7 @@ import uk.ac.gla.dcs.bigdata.studentfunctions.IdToNews;
 import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToId;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoreMapping;
+import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToId;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StringContentToNewsStatisticMap;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
@@ -156,7 +159,7 @@ public class AssessedExercise {
 				Encoders.bean(NewsStatistic.class));
 		Dataset<Tuple2<String, NewsStatistic>> newsStats = stringContentById
 				.flatMap(new StringContentToNewsStatisticMap(), newsEncoder);
-		
+
 		// baseline metrics
 		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
 		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext())
@@ -165,75 +168,78 @@ public class AssessedExercise {
 				.broadcast(newsStats.count());
 
 		List<Query> serialisedQueries = queries.collectAsList();
-
-//		JavaRDD<Query> queryRDD = queries.javaRDD();
-//		JavaPairRDD<String, NewsStatistic> newsStatRDD = newsStats.javaRDD().flatMapToPair(null);
-//		JavaPairRDD<String, Query> pairedQueriesRDD = queries.javaRDD().flatMapToPair(null);
-//		JavaPairRDD<String, Tuple2<Query, NewsStatistic>> newRDD = pairedQueriesRDD.join(newsStatRDD);
-//		newRDD.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus));
-
+		Broadcast<List<Query>> broadcastQueries = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(serialisedQueries);
+		
+		// newsStats (<String, NewsStatistic>) to resultScores (<Query, String, Double>)
+		ScoreMapping newsToScore = new ScoreMapping(broadcastMetrics, totalDocsInCorpus, broadcastQueries);
+		Encoder<Tuple3<Query, String, Double>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class), Encoders.STRING(), Encoders.DOUBLE());
+		Dataset<Tuple3<Query, String, Double>> resultScores = newsStats.flatMap(newsToScore, resultScoresEncoder);
+		
+		System.out.println("======================= "+resultScores.count()+" =======================");
+		
 		List<DocumentRanking> finalList = new ArrayList<DocumentRanking>();
 		// For each query in the dataset...
 		
-		for (Query query : serialisedQueries) {
-			// Calculate DPH scores
-			Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(),
-					Encoders.DOUBLE());
-			Dataset<Tuple2<String, Double>> scoreResults = newsStats
-					.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus, query), scoreResultEncoder);
-			// Sort the dataset by score and build its iterator
-			Dataset<Tuple2<String, Double>> sortedScoreResults = scoreResults.orderBy(functions.desc("_2"));
-			Iterator<Tuple2<String, Double>> resultIterator = sortedScoreResults.toLocalIterator();
-			// Build a list of RankedResults which are non-similar
-			List<RankedResult> resultsList = new ArrayList<RankedResult>();
-			IdToNews idToNews = new IdToNews();
-			IdToContent idToContent = new IdToContent();
+		// for (Query query : serialisedQueries) {
+		// 	// Calculate DPH scores
+		// 	Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(),
+		// 			Encoders.DOUBLE());
+		// 	Dataset<Tuple2<String, Double>> scoreResults = newsStats
+		// 			.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus, query), scoreResultEncoder);
+		// 	// Sort the dataset by score and build its iterator
+		// 	Dataset<Tuple2<String, Double>> sortedScoreResults = scoreResults.orderBy(functions.desc("_2"));
+		// 	Iterator<Tuple2<String, Double>> resultIterator = sortedScoreResults.toLocalIterator();
+		// 	// Build a list of RankedResults which are non-similar
+		// 	List<RankedResult> resultsList = new ArrayList<RankedResult>();
+		// 	IdToNews idToNews = new IdToNews();
+		// 	IdToContent idToContent = new IdToContent();
 
-			// Until the size of the list is not 10...
-			while (resultsList.size() <= 10) {
-				Tuple2<String, Double> currResult = resultIterator.next();
+		// 	// Until the size of the list is not 10...
+		// 	while (resultsList.size() <= 10) {
+		// 		Tuple2<String, Double> currResult = resultIterator.next();
 				
-				try {
-					// Get the current article object
-					NewsArticle currArticle = idToNews.getArticle(currResult._1, newsById);
-					// Get its content
-					String currContent;
+		// 		try {
+		// 			// Get the current article object
+		// 			NewsArticle currArticle = idToNews.getArticle(currResult._1, newsById);
+		// 			// Get its content
+		// 			String currContent;
 				
-					currContent = idToContent.getContent(currResult._1, stringContentById);
+		// 			currContent = idToContent.getContent(currResult._1, stringContentById);
 				
-					// Create RankedResults object
-					RankedResult result = new RankedResult(currResult._1, currArticle, currResult._2);
+		// 			// Create RankedResults object
+		// 			RankedResult result = new RankedResult(currResult._1, currArticle, currResult._2);
 	
-					// Base case: add first item to the list
-					if (resultsList.isEmpty()) {
-						resultsList.add(result);
-					} else {
-						// Otherwise check if element is similar to any of the present articles
-						Boolean toAdd = true;
-						for (RankedResult item : resultsList) {
-							// Get the currItem content and compute distance
-							String itemContent = idToContent.getContent(item.getDocid(), stringContentById);
-							if (TextDistanceCalculator.similarity(currContent, itemContent) >= 0.5) {
-								toAdd = false;
-							}
-						}
-						// If not similar to anything, add it
-						if (toAdd) {
-							resultsList.add(result);
-						}
-					}
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-			// Create DocumentRanking object
-			DocumentRanking docRanking = new DocumentRanking(query, resultsList);
-			// Add the this to the final list
-			finalList.add(docRanking);
-		}
+		// 			// Base case: add first item to the list
+		// 			if (resultsList.isEmpty()) {
+		// 				resultsList.add(result);
+		// 			} else {
+		// 				// Otherwise check if element is similar to any of the present articles
+		// 				Boolean toAdd = true;
+		// 				for (RankedResult item : resultsList) {
+		// 					// Get the currItem content and compute distance
+		// 					String itemContent = idToContent.getContent(item.getDocid(), stringContentById);
+		// 					if (TextDistanceCalculator.similarity(currContent, itemContent) >= 0.5) {
+		// 						toAdd = false;
+		// 					}
+		// 				}
+		// 				// If not similar to anything, add it
+		// 				if (toAdd) {
+		// 					resultsList.add(result);
+		// 				}
+		// 			}
+		// 		} catch (Exception e) {
+		// 			// TODO Auto-generated catch block
+		// 			e.printStackTrace();
+		// 		}
+		// 	}
+		// 	// Create DocumentRanking object
+		// 	DocumentRanking docRanking = new DocumentRanking(query, resultsList);
+		// 	// Add the this to the final list
+		// 	finalList.add(docRanking);
+		// }
 
-		return finalList;
+		// return finalList;
+		return null;
 	}
 
 }
