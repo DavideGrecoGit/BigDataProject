@@ -44,20 +44,20 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsSta
 
             // Using dummy score since the following gives NullPointerException
             
-            if(value._1() != null){
-            
-                double totalScore = 0;
+            // double totalScore = 0;
 
-                for (String word : query.getQueryTerms()){
-                    totalScore += DPHScorer.getDPHScore(
-                        value._2.getTermFrequencyMap().get(word).shortValue(),
-                        baseMetrics.getTermFrequencyMap().get(word), 
-                        value._2.getDocLength(),
-                        baseMetrics.getDocLength() / totalDocsInCorpus,
-                        totalDocsInCorpus);
-                }
+            // for (String word : query.getQueryTerms()){
+            //     totalScore += DPHScorer.getDPHScore(
+            //         value._2.getTermFrequencyMap().get(word).shortValue(),
+            //         baseMetrics.getTermFrequencyMap().get(word), 
+            //         value._2.getDocLength(),
+            //         baseMetrics.getDocLength() / totalDocsInCorpus,
+            //         totalDocsInCorpus);
+            // }
+
+            if(value._1() != null){
                 
-                // Double totalScore = Math.floor(Math.random() * (max - min + 1) + min);
+                Double totalScore = Math.floor(Math.random() * (max - min + 1) + min);
                 resultsList.add(new Tuple2<Query, RankedResult>(query, new RankedResult(value._1().getId(), value._1(), totalScore)));
             }
             
