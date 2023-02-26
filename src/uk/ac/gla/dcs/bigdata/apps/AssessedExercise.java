@@ -1,13 +1,10 @@
-package uk.ac.gla.dcs.bigdata.apps;
+package src.uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.ForeachFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
@@ -15,7 +12,7 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.KeyValueGroupedDataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.functions;
+import org.apache.spark.util.LongAccumulator;
 
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
@@ -24,38 +21,35 @@ import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
-import uk.ac.gla.dcs.bigdata.providedutilities.TextDistanceCalculator;
-import uk.ac.gla.dcs.bigdata.studentfunctions.FilterAndConvertContent;
-import uk.ac.gla.dcs.bigdata.studentfunctions.IdToContent;
-import uk.ac.gla.dcs.bigdata.studentfunctions.IdToNews;
-import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToId;
+import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToArticlesStatsFlatMap;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoreMapping;
-import uk.ac.gla.dcs.bigdata.studentfunctions.StringContentToNewsStatisticMap;
+import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToId;
+import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToResults;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
 /**
- * This is the main class where your Spark topology should be specified.
+ * This is the main class where the Spark topology is specified.
  * 
- * By default, running this class will execute the topology defined in the
- * rankDocuments() method in local mode, although this may be overriden by the
- * spark.master environment variable.
- * 
- * @author Richard
- *
+ * Running this class executes the topology defined in the rankDocuments()
+ * method in local mode, although this may be overridden by the spark.master
+ * environment variable.
  */
 public class AssessedExercise {
 
+	/**
+	 * Main method that runs what is described above.
+	 * 
+	 * @author Richard
+	 */
 	public static void main(String[] args) {
 
-		File hadoopDIR = new File("resources/hadoop/"); // represent the hadoop directory as a Java file so we can get
-														// an absolute path for it
-		System.setProperty("hadoop.home.dir", hadoopDIR.getAbsolutePath()); // set the JVM system property so that Spark
-																			// finds it
+		File hadoopDIR = new File("resources/hadoop/"); // Hadoop directory as a Java file, helps getting absolute path
+		System.setProperty("hadoop.home.dir", hadoopDIR.getAbsolutePath()); // set the JVM system property for Spark
 
-		// The code submitted for the assessed exerise may be run in either local or
-		// remote modes
-		// Configuration of this will be performed based on an environment variable
+		// The code submitted for the assessed exercise may be run in either local or
+		// remote modes. Configuration of this will be performed based on an environment
+		// variable
 		String sparkMasterDef = System.getenv("spark.master");
 		if (sparkMasterDef == null)
 			sparkMasterDef = "local[2]"; // default is local mode with two executors
@@ -106,7 +100,15 @@ public class AssessedExercise {
 
 	}
 
+	/**
+	 * Method that given queries and articles, returns a list of 10 most relevant of
+	 * these latter.
+	 * 
+	 * @author Davide, Manuel, Paul
+	 */
 	public static List<DocumentRanking> rankDocuments(SparkSession spark, String queryFile, String newsFile) {
+		// Get the start time (useful for the Evaluation section of the report)
+		long startTime = System.currentTimeMillis();
 
 		// Load queries and news articles
 		Dataset<Row> queriesjson = spark.read().text(queryFile);
@@ -114,126 +116,58 @@ public class AssessedExercise {
 
 		// Perform an initial conversion from Dataset<Row> to Query and NewsArticle Java
 		// objects
-		Dataset<Query> queries = queriesjson.map(new QueryFormaterMap(), Encoders.bean(Query.class)); // this converts
-																										// each row into
-																										// a Query
-		Dataset<NewsArticle> news = newsjson.map(new NewsFormaterMap(), Encoders.bean(NewsArticle.class)); // this
-																											// converts
-																											// each row
-																											// into a
-																											// NewsArticle
+
+		// this converts each row into a Query
+		Dataset<Query> queries = queriesjson.map(new QueryFormaterMap(), Encoders.bean(Query.class));
+		// this converts each row into a NewsArticle
+		Dataset<NewsArticle> news = newsjson.map(new NewsFormaterMap(), Encoders.bean(NewsArticle.class));
 
 		// ----------------------------------------------------------------
 		// Your Spark Topology should be defined here
 		// ----------------------------------------------------------------
 
-		// Debug
-		// long lenghtCorpus = news.count();
-		// System.out.println("Lenght of the Corpus: "+lenghtCorpus);
+		// Corpus length counter
+		LongAccumulator totalDocsInCorpus = spark.sparkContext().longAccumulator();
 
-		// Debug
-		// for (int i =0; i<queries.first().getQueryTerms().size(); i++) {
-		// System.out.println(queries.first().getQueryTerms().get(i));
-		// System.out.println(queries.first().getQueryTermCounts()[i]);
-		// }
-
-		// 2a. Query aggragetedQueries = queries.reduce(new QueriesReducer());
-
-		// 3. Reduce ContentItems to have only paragraph text and title by key
-
-		// - 3.1 Group newsArticle by id
-		NewsToId keyFunction = new NewsToId();
-		KeyValueGroupedDataset<String, NewsArticle> newsById = news.groupByKey(keyFunction, Encoders.STRING());
-
-		// - 3.2 Transform List<ContentItem> into String, keep grouping by id
-
-		FilterAndConvertContent stringContentFunction = new FilterAndConvertContent();
-		Encoder<Tuple2<String, String>> keyStringEncoder = Encoders.tuple(Encoders.STRING(), Encoders.STRING());
-		Dataset<Tuple2<String, String>> stringContentById = newsById.flatMapGroups(stringContentFunction,
-				keyStringEncoder);
-
-		Encoder<Tuple2<String, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.STRING(),
+		// Get StringContent from NewsArticle
+		NewsToArticlesStatsFlatMap stringContentFunction = new NewsToArticlesStatsFlatMap(totalDocsInCorpus);
+		Encoder<Tuple2<NewsArticle, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class),
 				Encoders.bean(NewsStatistic.class));
-		Dataset<Tuple2<String, NewsStatistic>> newsStats = stringContentById
-				.flatMap(new StringContentToNewsStatisticMap(), newsEncoder);
-		
-		// baseline metrics
-		Tuple2<String, NewsStatistic> baselineMetrics = newsStats.reduce(new ReduceNewsStatistic());
-		Broadcast<NewsStatistic> broadcastMetrics = JavaSparkContext.fromSparkContext(spark.sparkContext())
-				.broadcast(baselineMetrics._2);
-		Broadcast<Long> totalDocsInCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext())
-				.broadcast(newsStats.count());
+		Dataset<Tuple2<NewsArticle, NewsStatistic>> articleStats = news.flatMap(stringContentFunction, newsEncoder);
 
+		// Compute statistics of the entire corpus
+		Tuple2<NewsArticle, NewsStatistic> corpusStats = articleStats.reduce(new ReduceNewsStatistic());
+		Broadcast<NewsStatistic> broadcastCorpusStats = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(corpusStats._2());
+
+		// Make the queries accessible to all nodes
 		List<Query> serialisedQueries = queries.collectAsList();
+		Broadcast<List<Query>> broadcastQueries = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(serialisedQueries);
 
-//		JavaRDD<Query> queryRDD = queries.javaRDD();
-//		JavaPairRDD<String, NewsStatistic> newsStatRDD = newsStats.javaRDD().flatMapToPair(null);
-//		JavaPairRDD<String, Query> pairedQueriesRDD = queries.javaRDD().flatMapToPair(null);
-//		JavaPairRDD<String, Tuple2<Query, NewsStatistic>> newRDD = pairedQueriesRDD.join(newsStatRDD);
-//		newRDD.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus));
+		// Compute scores of articles based on a given query
+		ScoreMapping newsToScore = new ScoreMapping(broadcastCorpusStats, totalDocsInCorpus, broadcastQueries);
+		Encoder<Tuple2<Query, RankedResult>> resultScoresEncoder = Encoders.tuple(Encoders.bean(Query.class),
+				Encoders.bean(RankedResult.class));
+		Dataset<Tuple2<Query, RankedResult>> resultScores = articleStats.flatMap(newsToScore, resultScoresEncoder);
 
-		List<DocumentRanking> finalList = new ArrayList<DocumentRanking>();
-		// For each query in the dataset...
-		
-		for (Query query : serialisedQueries) {
-			// Calculate DPH scores
-			Encoder<Tuple2<String, Double>> scoreResultEncoder = Encoders.tuple(Encoders.STRING(),
-					Encoders.DOUBLE());
-			Dataset<Tuple2<String, Double>> scoreResults = newsStats
-					.map(new ScoreMapping(broadcastMetrics, totalDocsInCorpus, query), scoreResultEncoder);
-			// Sort the dataset by score and build its iterator
-			Dataset<Tuple2<String, Double>> sortedScoreResults = scoreResults.orderBy(functions.desc("_2"));
-			Iterator<Tuple2<String, Double>> resultIterator = sortedScoreResults.toLocalIterator();
-			// Build a list of RankedResults which are non-similar
-			List<RankedResult> resultsList = new ArrayList<RankedResult>();
-			IdToNews idToNews = new IdToNews();
-			IdToContent idToContent = new IdToContent();
+		// Group results by query
+		ScoresToId groupByQuery = new ScoresToId();
+		KeyValueGroupedDataset<Query, Tuple2<Query, RankedResult>> results = resultScores.groupByKey(groupByQuery,
+				Encoders.bean(Query.class));
 
-			// Until the size of the list is not 10...
-			while (resultsList.size() <= 10) {
-				Tuple2<String, Double> currResult = resultIterator.next();
-				
-				try {
-					// Get the current article object
-					NewsArticle currArticle = idToNews.getArticle(currResult._1, newsById);
-					// Get its content
-					String currContent;
-				
-					currContent = idToContent.getContent(currResult._1, stringContentById);
-				
-					// Create RankedResults object
-					RankedResult result = new RankedResult(currResult._1, currArticle, currResult._2);
-	
-					// Base case: add first item to the list
-					if (resultsList.isEmpty()) {
-						resultsList.add(result);
-					} else {
-						// Otherwise check if element is similar to any of the present articles
-						Boolean toAdd = true;
-						for (RankedResult item : resultsList) {
-							// Get the currItem content and compute distance
-							String itemContent = idToContent.getContent(item.getDocid(), stringContentById);
-							if (TextDistanceCalculator.similarity(currContent, itemContent) >= 0.5) {
-								toAdd = false;
-							}
-						}
-						// If not similar to anything, add it
-						if (toAdd) {
-							resultsList.add(result);
-						}
-					}
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-			// Create DocumentRanking object
-			DocumentRanking docRanking = new DocumentRanking(query, resultsList);
-			// Add the this to the final list
-			finalList.add(docRanking);
-		}
+		// Convert the results to DocumentRanking
+		ScoresToResults scoresToResults = new ScoresToResults();
+		Encoder<DocumentRanking> rankedResultsEncoder = Encoders.bean(DocumentRanking.class);
+		Dataset<DocumentRanking> rankedResults = results.mapGroups(scoresToResults, rankedResultsEncoder);
 
-		return finalList;
+		// Take the time again and report the runtime
+		long endTime = System.currentTimeMillis();
+		long executionTime = endTime - startTime;
+		System.out.println("Execution time: " + executionTime + " ms");
+
+		// Return the List of DocumentRankings
+		return rankedResults.collectAsList();
 	}
 
 }
