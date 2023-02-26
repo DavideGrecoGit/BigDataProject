@@ -29,27 +29,27 @@ import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToResults;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
 
 /**
- * This is the main class where your Spark topology should be specified.
+ * This is the main class where the Spark topology is specified.
  * 
- * By default, running this class will execute the topology defined in the
- * rankDocuments() method in local mode, although this may be overriden by the
- * spark.master environment variable.
- * 
- * @author Richard
- *
+ * Running this class executes the topology defined in the rankDocuments()
+ * method in local mode, although this may be overridden by the spark.master
+ * environment variable.
  */
 public class AssessedExercise {
 
+	/**
+	 * Main method that runs what is described above.
+	 * 
+	 * @author Richard
+	 */
 	public static void main(String[] args) {
 
-		File hadoopDIR = new File("resources/hadoop/"); // represent the hadoop directory as a Java file so we can get
-														// an absolute path for it
-		System.setProperty("hadoop.home.dir", hadoopDIR.getAbsolutePath()); // set the JVM system property so that Spark
-																			// finds it
+		File hadoopDIR = new File("resources/hadoop/"); // Hadoop directory as a Java file, helps getting absolute path
+		System.setProperty("hadoop.home.dir", hadoopDIR.getAbsolutePath()); // set the JVM system property for Spark
 
-		// The code submitted for the assessed exerise may be run in either local or
-		// remote modes
-		// Configuration of this will be performed based on an environment variable
+		// The code submitted for the assessed exercise may be run in either local or
+		// remote modes. Configuration of this will be performed based on an environment
+		// variable
 		String sparkMasterDef = System.getenv("spark.master");
 		if (sparkMasterDef == null)
 			sparkMasterDef = "local[2]"; // default is local mode with two executors
@@ -100,7 +100,15 @@ public class AssessedExercise {
 
 	}
 
+	/**
+	 * Method that given queries and articles, returns a list of 10 most relevant of
+	 * these latter.
+	 * 
+	 * @author Davide, Manuel, Paul
+	 */
 	public static List<DocumentRanking> rankDocuments(SparkSession spark, String queryFile, String newsFile) {
+		// Get the start time (useful for the Evaluation section of the report)
+		long startTime = System.currentTimeMillis();
 
 		// Load queries and news articles
 		Dataset<Row> queriesjson = spark.read().text(queryFile);
@@ -153,16 +161,10 @@ public class AssessedExercise {
 		Encoder<DocumentRanking> rankedResultsEncoder = Encoders.bean(DocumentRanking.class);
 		Dataset<DocumentRanking> rankedResults = results.mapGroups(scoresToResults, rankedResultsEncoder);
 
-		// Debugging
-		List<DocumentRanking> finalList = rankedResults.collectAsList();
-		for (DocumentRanking doc : finalList) {
-			System.out.println("**** Query is: '" + doc.getQuery().getOriginalQuery() + "'");
-			for (RankedResult result : doc.getResults()) {
-				System.out.println(
-						"--- Result is: '" + result.getArticle().getTitle() + "' and score is: " + result.getScore());
-			}
-			System.out.println("\n");
-		}
+		// Take the time again and report the runtime
+		long endTime = System.currentTimeMillis();
+		long executionTime = endTime - startTime;
+		System.out.println("Execution time: " + executionTime + " ms");
 
 		// Return the List of DocumentRankings
 		return rankedResults.collectAsList();

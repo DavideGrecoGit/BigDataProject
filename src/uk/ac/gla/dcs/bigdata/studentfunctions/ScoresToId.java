@@ -8,12 +8,9 @@ import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
 
 
 /**
- * 
- * Class that converts that takes a class and an iterator of results and returns
- * a DocumentRankingObjects.
+ * Class that returns the id of an article.
  * 
  * @author Davide, Manuel, Paul
- *
  */
 public class ScoresToId implements MapFunction<Tuple2<Query, RankedResult>, Query>{
    

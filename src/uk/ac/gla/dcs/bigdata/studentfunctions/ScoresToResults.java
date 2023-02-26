@@ -16,14 +16,11 @@ import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
 import uk.ac.gla.dcs.bigdata.providedutilities.TextDistanceCalculator;
 
 /**
- * 
- * Class that converts that takes a class and an iterator of results and returns
- * a DocumentRankingObjects.
+ * Class that takes a class and an iterator of results and returns a
+ * DocumentRankingObjects.
  * 
  * @author Davide, Manuel, Paul
- *
  */
-
 public class ScoresToResults implements MapGroupsFunction<Query, Tuple2<Query, RankedResult>, DocumentRanking> {
 
 	private static final long serialVersionUID = -4375038578249487281L;
@@ -37,9 +34,8 @@ public class ScoresToResults implements MapGroupsFunction<Query, Tuple2<Query, R
 		Comparator<Tuple2<Query, RankedResult>> comparator = new Comparator<Tuple2<Query, RankedResult>>() {
 			@Override
 			public int compare(Tuple2<Query, RankedResult> arg0, Tuple2<Query, RankedResult> arg1) {
-				return Double.compare(arg0._2().getScore(), arg1._2().getScore());
+				return Double.compare(arg1._2().getScore(), arg0._2().getScore());
 			}
-
 		};
 		Collections.sort(valuesList, comparator);
 		Iterator<Tuple2<Query, RankedResult>> resultIterator = valuesList.iterator();
