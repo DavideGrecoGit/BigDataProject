@@ -1,10 +1,13 @@
-package src.uk.ac.gla.dcs.bigdata.apps;
+package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
@@ -70,7 +73,7 @@ public class AssessedExercise {
 		// Get the location of the input news articles
 		String newsFile = System.getenv("bigdata.news");
 		if (newsFile == null)
-			newsFile = "data/TREC_Washington_Post_collection.v3.example.json"; // default is a sample of 5000 news
+			newsFile = "data/TREC_Washington_Post_collection.v2.jl.fix.json"; // default is a sample of 5000 news
 																				// articles
 
 		// Call the student's code
@@ -128,9 +131,26 @@ public class AssessedExercise {
 
 		// Corpus length counter
 		LongAccumulator totalDocsInCorpus = spark.sparkContext().longAccumulator();
+		
+		Query allTerms = queries.reduce(new ReduceFunction<Query>() {
+
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public Query call(Query v1, Query v2) throws Exception {
+				HashSet<String> terms = new HashSet<String>();
+				v1.getQueryTerms().forEach((term) -> terms.add(term));
+				v2.getQueryTerms().forEach((term) -> terms.add(term));
+				List<String> newList = new ArrayList<String>(terms);
+				return new Query(null, newList, null);
+			}
+			
+		});
+		
+		Broadcast<Query> broadcastAllQueryTerms = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(allTerms);
 
 		// Get StringContent from NewsArticle
-		NewsToArticlesStatsFlatMap stringContentFunction = new NewsToArticlesStatsFlatMap(totalDocsInCorpus);
+		NewsToArticlesStatsFlatMap stringContentFunction = new NewsToArticlesStatsFlatMap(totalDocsInCorpus, broadcastAllQueryTerms);
 		Encoder<Tuple2<NewsArticle, NewsStatistic>> newsEncoder = Encoders.tuple(Encoders.bean(NewsArticle.class),
 				Encoders.bean(NewsStatistic.class));
 		Dataset<Tuple2<NewsArticle, NewsStatistic>> articleStats = news.flatMap(stringContentFunction, newsEncoder);

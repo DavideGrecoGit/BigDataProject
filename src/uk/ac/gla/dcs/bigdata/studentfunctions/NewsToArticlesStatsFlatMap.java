@@ -1,20 +1,22 @@
-package src.uk.ac.gla.dcs.bigdata.studentfunctions;
+package uk.ac.gla.dcs.bigdata.studentfunctions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
+import org.terrier.indexing.tokenisation.Tokeniser;
+import org.terrier.terms.BaseTermPipelineAccessor;
 
 import scala.Tuple2;
 import uk.ac.gla.dcs.bigdata.providedstructures.ContentItem;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
+import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.studentstructures.NewsStatistic;
-
-import org.terrier.indexing.tokenisation.Tokeniser;
-import org.terrier.terms.BaseTermPipelineAccessor;
 
 /**
  * Class that extracts statistics of an article to then be fed into the DPH
@@ -28,9 +30,11 @@ public class NewsToArticlesStatsFlatMap implements FlatMapFunction<NewsArticle, 
 	private static final long serialVersionUID = 6882302572907096250L;
 
 	LongAccumulator totalDocsInCorpus;
+	HashSet<String> allQueryTerms;
 
-	public NewsToArticlesStatsFlatMap(LongAccumulator totalDocsInCorpus) {
+	public NewsToArticlesStatsFlatMap(LongAccumulator totalDocsInCorpus, Broadcast<Query> broadcastAllQueryTerms) {
 		this.totalDocsInCorpus = totalDocsInCorpus;
+		this.allQueryTerms = new HashSet<String>(broadcastAllQueryTerms.getValue().getQueryTerms());
 	}
 
 	@Override
@@ -105,10 +109,10 @@ public class NewsToArticlesStatsFlatMap implements FlatMapFunction<NewsArticle, 
 		for (int i = 0; i < inputTokens.length; i++) {
 			String processedTerm = termProcessingPipeline.pipelineTerm(inputTokens[i]);
 
-			if (processedTerm == null)
-				continue;
-
 			stats.incrementDocLenght();
+			
+			if (processedTerm == null || !allQueryTerms.contains(processedTerm))
+				continue;
 
 			if (finalMap.containsKey(inputTokens[i])) {
 				finalMap.put(inputTokens[i], finalMap.get(inputTokens[i]) + 1);

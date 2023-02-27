@@ -1,4 +1,4 @@
-package src.uk.ac.gla.dcs.bigdata.studentfunctions;
+package uk.ac.gla.dcs.bigdata.studentfunctions;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -44,7 +44,6 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsSta
 
 		// For each query...
 		for (Query query : this.queries) {
-			System.out.println("Starting query '" + query.getOriginalQuery() +"'");
 			if (value._1() != null) {
 				double totalScore = 0;
 				// For each word in the query..
@@ -60,7 +59,6 @@ public class ScoreMapping implements FlatMapFunction<Tuple2<NewsArticle, NewsSta
 				resultsList.add(new Tuple2<Query, RankedResult>(query,
 						new RankedResult(value._1().getId(), value._1(), totalScore)));
 			}
-			System.out.println("Query finished");
 		}
 		return resultsList.iterator();
 	}

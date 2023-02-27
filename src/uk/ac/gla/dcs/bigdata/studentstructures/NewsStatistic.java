@@ -1,4 +1,4 @@
-package src.uk.ac.gla.dcs.bigdata.studentstructures;
+package uk.ac.gla.dcs.bigdata.studentstructures;
 
 import java.io.Serializable;
 import java.util.HashMap;
