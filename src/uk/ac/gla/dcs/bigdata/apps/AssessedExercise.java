@@ -1,13 +1,10 @@
 package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
@@ -25,6 +22,7 @@ import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
 import uk.ac.gla.dcs.bigdata.studentfunctions.NewsToArticlesStatsFlatMap;
+import uk.ac.gla.dcs.bigdata.studentfunctions.QueryReducer;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ReduceNewsStatistic;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoreMapping;
 import uk.ac.gla.dcs.bigdata.studentfunctions.ScoresToId;
@@ -132,20 +130,7 @@ public class AssessedExercise {
 		// Corpus length counter
 		LongAccumulator totalDocsInCorpus = spark.sparkContext().longAccumulator();
 		
-		Query allTerms = queries.reduce(new ReduceFunction<Query>() {
-
-			private static final long serialVersionUID = 1L;
-
-			@Override
-			public Query call(Query v1, Query v2) throws Exception {
-				HashSet<String> terms = new HashSet<String>();
-				v1.getQueryTerms().forEach((term) -> terms.add(term));
-				v2.getQueryTerms().forEach((term) -> terms.add(term));
-				List<String> newList = new ArrayList<String>(terms);
-				return new Query(null, newList, null);
-			}
-			
-		});
+		Query allTerms = queries.reduce(new QueryReducer());
 		
 		Broadcast<Query> broadcastAllQueryTerms = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(allTerms);
 
